@@ -1,8 +1,9 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 from .core.config import settings
 from .models.response_models import HealthResponse
-from .api.routes import vision, chat, heygen, screen_share
+from .api.routes import vision, chat, heygen, screen_share, live_avatar, websocket, diagnostics, session_management
 
 # Create FastAPI application
 app = FastAPI(
@@ -16,7 +17,7 @@ app = FastAPI(
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=settings.cors_origins_list,
+    allow_origins=["*"],  # Allow all origins for development
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -27,6 +28,13 @@ app.include_router(vision.router, prefix="/api")
 app.include_router(chat.router, prefix="/api")
 app.include_router(heygen.router, prefix="/api")
 app.include_router(screen_share.router, prefix="/api")
+app.include_router(live_avatar.router, prefix="/api")
+app.include_router(websocket.router)
+app.include_router(diagnostics.router, prefix="/api")
+app.include_router(session_management.router, prefix="/api")
+
+# Mount static files
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.get("/api/health", response_model=HealthResponse, tags=["Health"])

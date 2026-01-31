@@ -1,5 +1,5 @@
 from typing import Optional
-from ..core.openai_client import openai_client
+from ..core.gemini_client import gemini_client
 from ..core.config import settings
 
 
@@ -50,11 +50,24 @@ async def chat_respond(message: str, language: str, context: Optional[str] = Non
         "content": f"{message}\n\n(Please respond in {language})",
     })
     
-    response = openai_client.chat.completions.create(
-        model=settings.openai_model,
-        messages=messages,
-        max_tokens=2000,
-        temperature=0.7,
+    # Combine messages into a single prompt for Gemini
+    conversation_parts = []
+    for msg in messages:
+        if msg["role"] == "system":
+            conversation_parts.append(f"System: {msg['content']}")
+        elif msg["role"] == "user":
+            conversation_parts.append(f"User: {msg['content']}")
+        elif msg["role"] == "assistant":
+            conversation_parts.append(f"Assistant: {msg['content']}")
+    
+    full_prompt = "\n\n".join(conversation_parts)
+    
+    response = gemini_client.GenerativeModel(settings.gemini_model).generate_content(
+        full_prompt,
+        generation_config={
+            "max_output_tokens": 2000,
+            "temperature": 0.7,
+        }
     )
     
-    return response.choices[0].message.content or "Unable to generate response."
+    return response.text or "Unable to generate response."

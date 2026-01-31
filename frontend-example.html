@@ -1,0 +1,305 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HeyGen LiveAvatar Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .connected { background-color: #d4edda; color: #155724; }
+        .disconnected { background-color: #f8d7da; color: #721c24; }
+        .loading { background-color: #fff3cd; color: #856404; }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+        button:disabled { opacity: 0.5; cursor: not-allowed; }
+        .primary { background-color: #007bff; color: white; }
+        .success { background-color: #28a745; color: white; }
+        .danger { background-color: #dc3545; color: white; }
+        input, textarea {
+            width: 100%;
+            padding: 10px;
+            margin: 5px 0;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+        }
+        .logs {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 10px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>HeyGen LiveAvatar Test</h1>
+        
+        <div id="status" class="status disconnected">Disconnected</div>
+        
+        <div>
+            <button id="createSession" class="primary">Create Session</button>
+            <button id="connectWs" class="primary" disabled>Connect WebSocket</button>
+            <button id="stopSession" class="danger" disabled>Stop Session</button>
+            <button id="diagnostics" class="primary">🔍 Run Diagnostics</button>
+        </div>
+        
+        <div>
+            <textarea id="textInput" rows="3" placeholder="Enter text for avatar to speak...">Hello Haresh, welcome to LiveAvatar!</textarea>
+            <button id="speakBtn" class="success" disabled>Speak</button>
+        </div>
+        
+        <div>
+            <button id="pingBtn" disabled>Ping</button>
+            <button id="clearLogs">Clear Logs</button>
+        </div>
+        
+        <div class="logs" id="logs"></div>
+    </div>
+
+    <script>
+        class LiveAvatarTester {
+            constructor() {
+                this.sessionId = null;
+                this.ws = null;
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                document.getElementById('createSession').addEventListener('click', () => this.createSession());
+                document.getElementById('connectWs').addEventListener('click', () => this.connectWebSocket());
+                document.getElementById('speakBtn').addEventListener('click', () => this.speak());
+                document.getElementById('stopSession').addEventListener('click', () => this.stopSession());
+                document.getElementById('pingBtn').addEventListener('click', () => this.ping());
+                document.getElementById('clearLogs').addEventListener('click', () => this.clearLogs());
+                document.getElementById('diagnostics').addEventListener('click', () => this.runDiagnostics());
+            }
+
+            log(message, type = 'info') {
+                const logs = document.getElementById('logs');
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                logEntry.innerHTML = `<span style="color: #666">[${timestamp}]</span> ${message}`;
+                logs.appendChild(logEntry);
+                logs.scrollTop = logs.scrollHeight;
+                console.log(message);
+            }
+
+            updateStatus(message, className) {
+                const status = document.getElementById('status');
+                status.textContent = message;
+                status.className = `status ${className}`;
+            }
+
+            async createSession() {
+                this.log('Creating session...');
+                this.updateStatus('Creating session...', 'loading');
+                
+                try {
+                    const response = await fetch('http://localhost:8000/api/live-avatar/create-session', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success && data.session_id) {
+                        this.sessionId = data.session_id;
+                        this.log(`Session created: ${this.sessionId}`);
+                        this.updateStatus('Session created', 'connected');
+                        document.getElementById('connectWs').disabled = false;
+                        document.getElementById('stopSession').disabled = false;
+                    } else {
+                        this.log(`Failed to create session: ${data.message}`, 'error');
+                        this.updateStatus('Session creation failed', 'disconnected');
+                    }
+                } catch (error) {
+                    this.log(`Error creating session: ${error.message}`, 'error');
+                    this.updateStatus('Connection error', 'disconnected');
+                }
+            }
+
+            async connectWebSocket() {
+                if (!this.sessionId) {
+                    this.log('No session ID available', 'error');
+                    return;
+                }
+
+                this.log(`Connecting WebSocket for session: ${this.sessionId}`);
+                this.updateStatus('Connecting WebSocket...', 'loading');
+
+                try {
+                    this.ws = new WebSocket(`ws://localhost:8000/ws/live-avatar/${this.sessionId}`);
+                    
+                    this.ws.onopen = () => {
+                        this.log('WebSocket connected');
+                        this.updateStatus('WebSocket connected', 'connected');
+                        document.getElementById('speakBtn').disabled = false;
+                        document.getElementById('pingBtn').disabled = false;
+                    };
+
+                    this.ws.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        this.log(`Received: ${JSON.stringify(data)}`);
+                        
+                        if (data.type === 'connected') {
+                            this.updateStatus('LiveAvatar ready', 'connected');
+                        } else if (data.type === 'error') {
+                            this.log(`Error: ${data.message}`, 'error');
+                        }
+                    };
+
+                    this.ws.onclose = () => {
+                        this.log('WebSocket disconnected');
+                        this.updateStatus('WebSocket disconnected', 'disconnected');
+                        document.getElementById('speakBtn').disabled = true;
+                        document.getElementById('pingBtn').disabled = true;
+                    };
+
+                    this.ws.onerror = (error) => {
+                        this.log(`WebSocket error: ${error}`, 'error');
+                        this.updateStatus('WebSocket error', 'disconnected');
+                    };
+
+                } catch (error) {
+                    this.log(`Failed to connect WebSocket: ${error.message}`, 'error');
+                    this.updateStatus('WebSocket connection failed', 'disconnected');
+                }
+            }
+
+            speak() {
+                const text = document.getElementById('textInput').value.trim();
+                if (!text) {
+                    this.log('Please enter text to speak', 'error');
+                    return;
+                }
+
+                if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                    this.log('WebSocket not connected', 'error');
+                    return;
+                }
+
+                this.log(`Sending text: "${text}"`);
+                this.ws.send(JSON.stringify({
+                    type: 'speak',
+                    text: text
+                }));
+            }
+
+            ping() {
+                if (!this.ws || this.ws.readyState !== WebSocket.OPEN) {
+                    this.log('WebSocket not connected', 'error');
+                    return;
+                }
+
+                this.log('Sending ping...');
+                this.ws.send(JSON.stringify({ type: 'ping' }));
+            }
+
+            async stopSession() {
+                if (!this.sessionId) {
+                    this.log('No session to stop', 'error');
+                    return;
+                }
+
+                this.log('Stopping session...');
+                
+                try {
+                    const response = await fetch(`http://localhost:8000/api/live-avatar/stop-session/${this.sessionId}`, {
+                        method: 'POST'
+                    });
+                    
+                    const data = await response.json();
+                    this.log(`Stop response: ${data.message}`);
+                    
+                    if (this.ws) {
+                        this.ws.close();
+                    }
+                    
+                    this.sessionId = null;
+                    this.updateStatus('Session stopped', 'disconnected');
+                    
+                    // Reset buttons
+                    document.getElementById('connectWs').disabled = true;
+                    document.getElementById('speakBtn').disabled = true;
+                    document.getElementById('pingBtn').disabled = true;
+                    document.getElementById('stopSession').disabled = true;
+                    document.getElementById('createSession').disabled = false;
+                    
+                } catch (error) {
+                    this.log(`Error stopping session: ${error.message}`, 'error');
+                }
+            }
+
+            clearLogs() {
+                document.getElementById('logs').innerHTML = '';
+            }
+
+            async runDiagnostics() {
+                this.log('🔍 Running comprehensive diagnostics...');
+                this.updateStatus('Running diagnostics...', 'loading');
+                
+                try {
+                    const response = await fetch('http://localhost:8000/api/diagnostics/heygen');
+                    const data = await response.json();
+                    
+                    this.log('=== HEYGEN DIAGNOSTIC RESULTS ===');
+                    this.log(`Overall Status: ${data.success ? '✅ PASS' : '❌ FAIL'}`);
+                    
+                    // Display each check
+                    Object.entries(data.checks).forEach(([checkName, result]) => {
+                        this.log(`${checkName.toUpperCase()}: ${result.status}`);
+                        if (result.value) {
+                            this.log(`  Value: ${JSON.stringify(result.value)}`);
+                        }
+                        if (result.issue) {
+                            this.log(`  Issue: ${result.issue}`, 'error');
+                        }
+                    });
+                    
+                    // Display recommendations
+                    if (data.recommendations.length > 0) {
+                        this.log('=== RECOMMENDATIONS ===');
+                        data.recommendations.forEach((rec, index) => {
+                            this.log(`${index + 1}. ${rec}`, 'warning');
+                        });
+                    }
+                    
+                    this.updateStatus('Diagnostics complete', data.success ? 'connected' : 'disconnected');
+                    
+                } catch (error) {
+                    this.log(`❌ Diagnostics failed: ${error.message}`, 'error');
+                    this.updateStatus('Diagnostics error', 'disconnected');
+                }
+            }
+        }
+
+        // Initialize the tester
+        const tester = new LiveAvatarTester();
+    </script>
+</body>
+</html>

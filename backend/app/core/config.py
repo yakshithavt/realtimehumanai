@@ -6,10 +6,10 @@ import os
 class Settings(BaseSettings):
     """Application settings loaded from environment variables."""
     
-    # OpenAI Configuration
-    openai_api_key: str = ""
-    openai_model: str = "gpt-4o"
-    openai_vision_model: str = "gpt-4o"
+    # Gemini AI Configuration
+    google_api_key: str = ""
+    gemini_model: str = "gemini-2.5-flash"
+    gemini_vision_model: str = "gemini-2.5-flash"
     
     # HeyGen Configuration
     heygen_api_key: str = ""
@@ -17,7 +17,7 @@ class Settings(BaseSettings):
     default_avatar_id: str = ""
     
     # CORS Configuration
-    cors_origins: str = "http://localhost:5173,http://localhost:3000"
+    cors_origins: str = "http://localhost:5173,http://localhost:3000,http://localhost:8080,http://localhost:8000,null"
     
     # Server Configuration
     debug: bool = False

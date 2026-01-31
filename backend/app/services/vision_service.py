@@ -1,6 +1,6 @@
 import base64
 from typing import Optional
-from ..core.openai_client import openai_client
+from ..core.gemini_client import gemini_client
 from ..core.config import settings
 
 
@@ -46,33 +46,25 @@ async def analyze_image(image_bytes: bytes, language: str, filename: str) -> str
     }
     mime_type = mime_types.get(extension, "image/jpeg")
     
-    # Create vision request
-    response = openai_client.chat.completions.create(
-        model=settings.openai_vision_model,
-        messages=[
-            {
-                "role": "system",
-                "content": get_tutor_system_prompt(language),
-            },
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": f"Please analyze this image and explain what you see in detail. Respond in {language}.",
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:{mime_type};base64,{base64_image}",
-                            "detail": "high",
-                        },
-                    },
-                ],
-            },
-        ],
-        max_tokens=2000,
-        temperature=0.7,
+    # Create vision request with Gemini
+    model = gemini_client.GenerativeModel(settings.gemini_vision_model)
+    
+    # Prepare the content with image
+    content = [
+        get_tutor_system_prompt(language),
+        f"Please analyze this image and explain what you see in detail. Respond in {language}.",
+        {
+            "mime_type": mime_type,
+            "data": base64_image
+        }
+    ]
+    
+    response = model.generate_content(
+        content,
+        generation_config={
+            "max_output_tokens": 2000,
+            "temperature": 0.7,
+        }
     )
     
-    return response.choices[0].message.content or "Unable to analyze image."
+    return response.text or "Unable to analyze image."

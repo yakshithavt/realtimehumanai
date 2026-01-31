@@ -76,11 +76,22 @@ async def generate_avatar_video(text: str, language: str) -> Tuple[bool, Optiona
             
             if response.status_code == 200:
                 data = response.json()
+                error = data.get("error")
+                
+                if error:
+                    # Handle HeyGen API errors that return 200 status
+                    error_message = error.get("message", "Unknown HeyGen API error")
+                    if error.get("code") == "internal_error" and "Unauthorized" in error_message:
+                        return False, None, None, "Invalid HeyGen API key"
+                    return False, None, None, f"HeyGen API error: {error_message}"
+                
                 video_id = data.get("data", {}).get("video_id")
                 
                 if video_id:
                     # Poll for video completion (simplified - in production use webhooks)
                     return True, None, video_id, "Video generation started. Check status with video_id."
+                else:
+                    return False, None, None, "No video ID returned from HeyGen API"
                     
             elif response.status_code == 401:
                 return False, None, None, "Invalid HeyGen API key"

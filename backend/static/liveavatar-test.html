@@ -1,0 +1,495 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>LiveAvatar Session Test</title>
+    <script src="https://cdn.jsdelivr.net/npm/@heygen/liveavatar-web-sdk@latest/dist/index.umd.js"></script>
+    <script>
+        // Fallback if CDN fails
+        if (!window.HeyGenLiveAvatarSDK) {
+            console.log('Trying alternative SDK source...');
+            const script = document.createElement('script');
+            script.src = 'https://unpkg.com/@heygen/liveavatar-web-sdk@latest/dist/index.umd.js';
+            script.onload = () => console.log('✅ LiveAvatar SDK loaded from unpkg');
+            script.onerror = () => console.error('❌ Failed to load LiveAvatar SDK from all sources');
+            document.head.appendChild(script);
+        }
+    </script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1000px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .status {
+            padding: 15px;
+            border-radius: 8px;
+            margin: 15px 0;
+            font-weight: bold;
+        }
+        .success { background-color: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background-color: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .warning { background-color: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .info { background-color: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+        .loading { background-color: #e2e3e5; color: #383d41; border: 1px solid #d6d8db; }
+        
+        button {
+            padding: 12px 24px;
+            margin: 8px;
+            border: none;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: bold;
+            transition: all 0.3s ease;
+        }
+        button:hover { transform: translateY(-2px); }
+        button:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+        
+        .primary { background-color: #007bff; color: white; }
+        .success { background-color: #28a745; color: white; }
+        .danger { background-color: #dc3545; color: white; }
+        .warning { background-color: #ffc107; color: #212529; }
+        
+        .video-container {
+            width: 100%;
+            max-width: 640px;
+            height: 480px;
+            background: #000;
+            border-radius: 8px;
+            margin: 20px 0;
+            position: relative;
+            overflow: hidden;
+        }
+        
+        .video-placeholder {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            color: #666;
+            font-size: 18px;
+        }
+        
+        .controls {
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            margin: 20px 0;
+        }
+        
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        input, textarea, select {
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            font-size: 14px;
+        }
+        
+        textarea {
+            min-height: 80px;
+            resize: vertical;
+        }
+        
+        .logs {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 6px;
+            padding: 15px;
+            height: 200px;
+            overflow-y: auto;
+            font-family: monospace;
+            font-size: 12px;
+            margin: 20px 0;
+        }
+        
+        .session-info {
+            background: #e9ecef;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+        }
+        
+        .session-info h4 {
+            margin-top: 0;
+            color: #495057;
+        }
+        
+        .emoji {
+            font-size: 18px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🎭 LiveAvatar Session Test</h1>
+        <p>Connect to your LiveAvatar session - No CORS issues!</p>
+        
+        <div id="status" class="status info">Ready to connect to LiveAvatar</div>
+        
+        <div class="video-container">
+            <div id="videoPlaceholder" class="video-placeholder">
+                🎥 LiveAvatar video will appear here
+            </div>
+            <video id="avatarVideo" style="width: 100%; height: 100%; display: none;"></video>
+        </div>
+        
+        <div class="controls">
+            <div>
+                <button id="useExistingSession" class="primary">🔗 Use Existing Session</button>
+                <button id="createNewSession" class="success">🆕 Create New Session</button>
+                <button id="stopSession" class="danger" disabled>⏹️ Stop Session</button>
+                <button id="clearLogs" class="warning">🗑️ Clear Logs</button>
+            </div>
+            
+            <div class="input-group">
+                <label for="existingSessionId">Existing Session ID:</label>
+                <input type="text" id="existingSessionId" value="c2cacc7d-d7ef-4c56-b560-f8286681d745" placeholder="Enter your session ID">
+                
+                <label for="textInput">Text for Avatar to Speak:</label>
+                <textarea id="textInput" placeholder="Enter text for the avatar to speak...">Hello! I can see you've successfully created a LiveAvatar session. Let me test if I can speak and interact with you!</textarea>
+                
+                <button id="speakBtn" class="primary" disabled>🗣️ Send Text to Avatar</button>
+            </div>
+        </div>
+        
+        <div id="sessionInfo" class="session-info" style="display: none;">
+            <h4>📋 Session Information</h4>
+            <div id="sessionDetails"></div>
+        </div>
+        
+        <div class="logs" id="logs"></div>
+    </div>
+
+    <script>
+        class LiveAvatarTester {
+            constructor() {
+                this.sessionToken = null;
+                this.session = null;
+                this.sessionId = null;
+                this.setupEventListeners();
+            }
+
+            setupEventListeners() {
+                document.getElementById('useExistingSession').addEventListener('click', () => this.useExistingSession());
+                document.getElementById('createNewSession').addEventListener('click', () => this.createNewSession());
+                document.getElementById('stopSession').addEventListener('click', () => this.stopSession());
+                document.getElementById('speakBtn').addEventListener('click', () => this.sendText());
+                document.getElementById('clearLogs').addEventListener('click', () => this.clearLogs());
+            }
+
+            log(message, type = 'info') {
+                const logs = document.getElementById('logs');
+                const timestamp = new Date().toLocaleTimeString();
+                const logEntry = document.createElement('div');
+                logEntry.innerHTML = `<span style="color: #666">[${timestamp}]</span> ${message}`;
+                logs.appendChild(logEntry);
+                logs.scrollTop = logs.scrollHeight;
+                console.log(message);
+            }
+
+            updateStatus(message, className) {
+                const status = document.getElementById('status');
+                status.textContent = message;
+                status.className = `status ${className}`;
+            }
+
+            updateButtons(useExisting, createNew, stop, speak) {
+                document.getElementById('useExistingSession').disabled = useExisting;
+                document.getElementById('createNewSession').disabled = createNew;
+                document.getElementById('stopSession').disabled = stop;
+                document.getElementById('speakBtn').disabled = speak;
+            }
+
+            showSessionInfo(info) {
+                const sessionInfo = document.getElementById('sessionInfo');
+                const sessionDetails = document.getElementById('sessionDetails');
+                
+                sessionDetails.innerHTML = `
+                    <strong>Session ID:</strong> ${info.sessionId || 'N/A'}<br>
+                    <strong>Status:</strong> ${info.status || 'Unknown'}<br>
+                    <strong>Mode:</strong> ${info.mode || 'Unknown'}<br>
+                    <strong>Avatar ID:</strong> ${info.avatarId || 'Default'}<br>
+                `;
+                
+                sessionInfo.style.display = 'block';
+            }
+
+            async useExistingSession() {
+                const sessionId = document.getElementById('existingSessionId').value.trim();
+                if (!sessionId) {
+                    this.log('❌ Please enter a session ID', 'error');
+                    return;
+                }
+
+                this.updateStatus('🔗 Connecting to existing session...', 'loading');
+                this.updateButtons(true, true, false, true);
+                
+                try {
+                    this.log(`🔗 Attempting to connect to session: ${sessionId}`);
+                    
+                    // For existing sessions, we need to get a new session token
+                    // Let's create a new token for the same avatar
+                    const response = await fetch('http://localhost:8000/api/live-avatar/create-session', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success && data.session_token) {
+                        this.sessionToken = data.session_token;
+                        this.sessionId = data.session_id;
+                        
+                        this.log(`✅ New session token created: ${data.session_id}`);
+                        this.log(`🔑 Token: ${data.session_token.substring(0, 50)}...`);
+                        
+                        // Now start the session
+                        await this.startLiveAvatarSession();
+                        
+                    } else {
+                        this.log(`❌ Failed to create session token: ${data.message}`, 'error');
+                        this.updateStatus(`❌ Token creation failed: ${data.message}`, 'error');
+                        this.updateButtons(false, false, false, false);
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Error connecting to session: ${error.message}`, 'error');
+                    this.updateStatus('❌ Connection error', 'error');
+                    this.updateButtons(false, false, false, false);
+                }
+            }
+
+            async createNewSession() {
+                this.updateStatus('🆕 Creating new session...', 'loading');
+                this.updateButtons(true, true, false, true);
+                
+                try {
+                    this.log('🆕 Creating new LiveAvatar session...');
+                    
+                    const response = await fetch('http://localhost:8000/api/live-avatar/create-session', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({})
+                    });
+                    
+                    const data = await response.json();
+                    
+                    if (data.success && data.session_token) {
+                        this.sessionToken = data.session_token;
+                        this.sessionId = data.session_id;
+                        
+                        this.log(`✅ New session created: ${data.session_id}`);
+                        this.log(`🔑 Token: ${data.session_token.substring(0, 50)}...`);
+                        
+                        // Update the session ID input
+                        document.getElementById('existingSessionId').value = data.session_id;
+                        
+                        // Now start the session
+                        await this.startLiveAvatarSession();
+                        
+                    } else {
+                        this.log(`❌ Failed to create session: ${data.message}`, 'error');
+                        this.updateStatus(`❌ Session creation failed: ${data.message}`, 'error');
+                        this.updateButtons(false, false, false, false);
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Error creating session: ${error.message}`, 'error');
+                    this.updateStatus('❌ Session creation error', 'error');
+                    this.updateButtons(false, false, false, false);
+                }
+            }
+
+            async startLiveAvatarSession() {
+                try {
+                    this.log('🚀 Starting LiveAvatar session...');
+                    
+                    // Start session on backend to get LiveKit credentials
+                    const startResponse = await fetch('http://localhost:8000/api/live-avatar/start-session', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ session_token: this.sessionToken })
+                    });
+                    
+                    const startData = await startResponse.json();
+                    
+                    if (startData.success && startData.livekit_url && startData.livekit_token) {
+                        this.log(`✅ Backend session started`);
+                        this.log(`🔗 LiveKit URL: ${startData.livekit_url}`);
+                        
+                        // Initialize LiveAvatar SDK
+                        if (!window.HeyGenLiveAvatarSDK) {
+                            this.log('❌ LiveAvatar SDK not loaded. Please refresh the page.', 'error');
+                            this.updateStatus('❌ SDK not loaded', 'error');
+                            return;
+                        }
+                        
+                        const { LiveAvatarSession } = window.HeyGenLiveAvatarSDK;
+                        this.log(`✅ LiveAvatar SDK loaded successfully`);
+                        
+                        const userConfig = {
+                            voiceChat: true,
+                        };
+                        
+                        this.session = new LiveAvatarSession(this.sessionToken, userConfig);
+                        
+                        // Set up event listeners
+                        this.session.on('avatarStarted', () => {
+                            this.log('🎭 Avatar started successfully!');
+                            this.updateStatus('🎭 LiveAvatar is ACTIVE and ready!', 'success');
+                            
+                            // Show video
+                            const video = document.getElementById('avatarVideo');
+                            const placeholder = document.getElementById('videoPlaceholder');
+                            
+                            // Attach video stream
+                            this.session.attachVideo(video);
+                            
+                            video.style.display = 'block';
+                            placeholder.style.display = 'none';
+                            
+                            this.updateButtons(false, false, false, false);
+                        });
+                        
+                        this.session.on('avatarStopped', () => {
+                            this.log('⏹️ Avatar stopped');
+                            this.updateStatus('⏹️ Session stopped', 'info');
+                            
+                            // Hide video
+                            const video = document.getElementById('avatarVideo');
+                            const placeholder = document.getElementById('videoPlaceholder');
+                            
+                            video.style.display = 'none';
+                            placeholder.style.display = 'flex';
+                            
+                            this.updateButtons(false, false, false, true);
+                        });
+                        
+                        this.session.on('error', (error) => {
+                            this.log(`❌ Avatar error: ${error.message}`, 'error');
+                            this.updateStatus(`❌ Error: ${error.message}`, 'error');
+                        });
+                        
+                        this.session.on('speaking', () => {
+                            this.log('🗣️ Avatar is speaking...');
+                        });
+                        
+                        this.session.on('speakingStopped', () => {
+                            this.log('🤫 Avatar finished speaking');
+                        });
+                        
+                        this.session.on('connectionStateChanged', (state) => {
+                            this.log(`🔄 Connection state: ${state}`);
+                        });
+                        
+                        // Start the session
+                        await this.session.start();
+                        
+                        this.showSessionInfo({
+                            sessionId: this.sessionId,
+                            status: 'Active',
+                            mode: 'Full',
+                            avatarId: 'Default'
+                        });
+                        
+                    } else {
+                        this.log(`❌ Failed to start backend session: ${startData.message}`, 'error');
+                        this.updateStatus(`❌ Session start failed: ${startData.message}`, 'error');
+                        this.updateButtons(false, false, false, false);
+                    }
+                    
+                } catch (error) {
+                    this.log(`❌ Error starting LiveAvatar: ${error.message}`, 'error');
+                    this.updateStatus('❌ LiveAvatar start error', 'error');
+                    this.updateButtons(false, false, false, false);
+                }
+            }
+
+            async stopSession() {
+                if (!this.session) {
+                    this.log('❌ No active session to stop', 'error');
+                    return;
+                }
+
+                this.updateStatus('⏹️ Stopping session...', 'loading');
+                
+                try {
+                    await this.session.stop();
+                    this.session = null;
+                    this.sessionToken = null;
+                    this.sessionId = null;
+                    
+                    this.log('✅ Session stopped successfully');
+                    this.updateStatus('✅ Session stopped', 'info');
+                    
+                    // Hide video
+                    const video = document.getElementById('avatarVideo');
+                    const placeholder = document.getElementById('videoPlaceholder');
+                    
+                    video.style.display = 'none';
+                    placeholder.style.display = 'flex';
+                    
+                    // Hide session info
+                    document.getElementById('sessionInfo').style.display = 'none';
+                    
+                    this.updateButtons(false, false, false, true);
+                    
+                } catch (error) {
+                    this.log(`❌ Error stopping session: ${error.message}`, 'error');
+                    this.updateStatus('❌ Stop session error', 'error');
+                }
+            }
+
+            async sendText() {
+                if (!this.session) {
+                    this.log('❌ No active session', 'error');
+                    return;
+                }
+
+                const text = document.getElementById('textInput').value.trim();
+                if (!text) {
+                    this.log('❌ Please enter text to send', 'error');
+                    return;
+                }
+
+                try {
+                    this.log(`📤 Sending text: "${text}"`);
+                    await this.session.speak(text);
+                    this.log(`✅ Text sent to avatar successfully`);
+                    
+                } catch (error) {
+                    this.log(`❌ Error sending text: ${error.message}`, 'error');
+                }
+            }
+
+            clearLogs() {
+                document.getElementById('logs').innerHTML = '';
+            }
+        }
+
+        // Initialize the LiveAvatar tester
+        const liveAvatar = new LiveAvatarTester();
+        
+        // Log initial status
+        liveAvatar.log('🎭 LiveAvatar Test Interface Ready');
+        liveAvatar.log('💡 Click "Use Existing Session" to connect to your active session');
+        liveAvatar.log('💡 Or click "Create New Session" to create a fresh one');
+        liveAvatar.log('✅ CORS issues fixed - served from same origin!');
+    </script>
+</body>
+</html>

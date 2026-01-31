@@ -1,5 +1,5 @@
 import base64
-from ..core.openai_client import openai_client
+from ..core.gemini_client import gemini_client
 from ..core.config import settings
 
 
@@ -21,7 +21,7 @@ Remember: Your entire response must be in {language}."""
 
 async def analyze_screen_frame(frame_base64: str, language: str) -> str:
     """
-    Analyze a screen capture frame using OpenAI Vision API.
+    Analyze a screen capture frame using Gemini Vision API.
     
     Args:
         frame_base64: Base64 encoded image of screen frame
@@ -30,33 +30,25 @@ async def analyze_screen_frame(frame_base64: str, language: str) -> str:
     Returns:
         AI-generated analysis in specified language
     """
-    # Create vision request
-    response = openai_client.chat.completions.create(
-        model=settings.openai_vision_model,
-        messages=[
-            {
-                "role": "system",
-                "content": get_screen_tutor_prompt(language),
-            },
-            {
-                "role": "user",
-                "content": [
-                    {
-                        "type": "text",
-                        "text": f"This is a capture of my screen. Please analyze what you see and help me understand it. Explain in {language}.",
-                    },
-                    {
-                        "type": "image_url",
-                        "image_url": {
-                            "url": f"data:image/jpeg;base64,{frame_base64}",
-                            "detail": "high",
-                        },
-                    },
-                ],
-            },
-        ],
-        max_tokens=2000,
-        temperature=0.7,
+    # Create vision request with Gemini
+    model = gemini_client.GenerativeModel(settings.gemini_vision_model)
+    
+    # Prepare the content with screen frame
+    content = [
+        get_screen_tutor_prompt(language),
+        f"This is a capture of my screen. Please analyze what you see and help me understand it. Explain in {language}.",
+        {
+            "mime_type": "image/jpeg",
+            "data": frame_base64
+        }
+    ]
+    
+    response = model.generate_content(
+        content,
+        generation_config={
+            "max_output_tokens": 2000,
+            "temperature": 0.7,
+        }
     )
     
-    return response.choices[0].message.content or "Unable to analyze screen."
+    return response.text or "Unable to analyze screen."

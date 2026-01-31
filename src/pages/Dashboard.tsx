@@ -5,7 +5,7 @@ import { ImageUploader } from '@/components/ImageUploader';
 import { ChatBox } from '@/components/ChatBox';
 import { ResponseBox } from '@/components/ResponseBox';
 import { ScreenShareCapture } from '@/components/ScreenShareCapture';
-import { AvatarPlayer } from '@/components/AvatarPlayer';
+import LiveAvatar from '@/components/LiveAvatar';
 import { AppProvider, useApp } from '@/contexts/AppContext';
 
 function DashboardContent() {
@@ -62,10 +62,10 @@ function DashboardContent() {
 
             <div className="glass-card rounded-2xl p-6 animate-fade-in">
               <h2 className="text-lg font-semibold text-foreground mb-4">
-                🎭 AI Avatar Presenter
+                🎭 LiveAvatar AI Assistant
               </h2>
-              <div className="h-[300px]">
-                <AvatarPlayer />
+              <div className="h-[400px]">
+                <LiveAvatar />
               </div>
             </div>
           </div>
@@ -75,12 +75,6 @@ function DashboardContent() {
         <footer className="mt-12 text-center text-sm text-muted-foreground">
           <p>
             AI Vision Avatar Tutor • Powered by OpenAI Vision & HeyGen
-          </p>
-          <p className="mt-1 text-xs">
-            Connect your FastAPI backend at{' '}
-            <code className="px-1.5 py-0.5 rounded bg-secondary text-foreground">
-              VITE_API_BASE_URL
-            </code>
           </p>
         </footer>
       </main>
