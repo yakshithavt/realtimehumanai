@@ -2,7 +2,7 @@ import httpx
 import asyncio
 import json
 import re
-from typing import Dict, Optional, Tuple
+from typing import Dict, List, Optional, Tuple
 from ..core.config import settings
 
 

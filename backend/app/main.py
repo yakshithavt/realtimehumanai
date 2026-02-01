@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from .core.config import settings
 from .models.response_models import HealthResponse
-from .api.routes import vision, chat, heygen, screen_share, live_avatar, websocket, diagnostics, session_management
+from .api.routes import vision, chat, heygen, screen_share, live_avatar, websocket, diagnostics, session_management, file_analysis, analytics, search, notes, i18n
 
 # Create FastAPI application
 app = FastAPI(
@@ -32,6 +32,11 @@ app.include_router(live_avatar.router, prefix="/api")
 app.include_router(websocket.router)
 app.include_router(diagnostics.router, prefix="/api")
 app.include_router(session_management.router, prefix="/api")
+app.include_router(file_analysis.router, prefix="/api")
+app.include_router(analytics.router, prefix="/api")
+app.include_router(search.router, prefix="/api")
+app.include_router(notes.router, prefix="/api")
+app.include_router(i18n.router, prefix="/api")
 
 # Mount static files
 app.mount("/static", StaticFiles(directory="static"), name="static")

@@ -1,6 +1,6 @@
 import React, { useRef, useState, useCallback, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
-import { Monitor, MonitorOff, Loader2, Camera } from 'lucide-react';
+import { Monitor, MonitorOff, Loader2, Camera, Play, Pause, RotateCcw } from 'lucide-react';
 import { useApp, getLanguageName } from '@/contexts/AppContext';
 import { apiService } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
@@ -19,8 +19,12 @@ export function ScreenShareCapture() {
   const [isSharing, setIsSharing] = useState(false);
   const [stream, setStream] = useState<MediaStream | null>(null);
   const [framePreview, setFramePreview] = useState<string | null>(null);
+  const [isContinuousAnalysis, setIsContinuousAnalysis] = useState(false);
+  const [analysisInterval, setAnalysisInterval] = useState(5000); // 5 seconds default
+  const [lastAnalysisTime, setLastAnalysisTime] = useState<Date | null>(null);
   const videoRef = useRef<HTMLVideoElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
   const startScreenShare = async () => {
     try {
@@ -58,12 +62,14 @@ export function ScreenShareCapture() {
   };
 
   const stopScreenShare = useCallback(() => {
+    stopContinuousAnalysis(); // Stop continuous analysis
     if (stream) {
       stream.getTracks().forEach((track) => track.stop());
       setStream(null);
     }
     setIsSharing(false);
     setFramePreview(null);
+    setLastAnalysisTime(null);
     if (videoRef.current) {
       videoRef.current.srcObject = null;
     }
@@ -78,24 +84,75 @@ export function ScreenShareCapture() {
 
     if (!ctx) return;
 
+    // Wait for video to be ready and have valid dimensions
+    if (video.readyState !== 4 || video.videoWidth === 0 || video.videoHeight === 0) {
+      console.log('Video not ready, skipping frame capture');
+      return;
+    }
+
+    // Set canvas dimensions to match video
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
-    ctx.drawImage(video, 0, 0);
+    
+    // Clear canvas before drawing
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw video frame to canvas
+    try {
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+    } catch (error) {
+      console.error('Error drawing video frame:', error);
+      return;
+    }
 
-    const frameBase64 = canvas.toDataURL('image/jpeg', 0.8);
+    // Convert to base64 with validation
+    let frameBase64: string;
+    try {
+      frameBase64 = canvas.toDataURL('image/jpeg', 0.8);
+    } catch (error) {
+      console.error('Error converting canvas to base64:', error);
+      return;
+    }
+
+    // Validate the base64 string
+    if (!frameBase64 || !frameBase64.startsWith('data:image/')) {
+      console.error('Invalid base64 data generated');
+      return;
+    }
+
     setFramePreview(frameBase64);
+    setLastAnalysisTime(new Date());
 
     // Send to API
     setIsAnalyzing(true);
     try {
       addMessage({
         role: 'user',
-        content: '[Screen capture frame]',
+        content: `[Screen capture frame - ${new Date().toLocaleTimeString()}]`,
         type: 'screen',
       });
 
-      // Remove data URL prefix for API
-      const base64Data = frameBase64.replace(/^data:image\/\w+;base64,/, '');
+      // Remove data URL prefix for API and validate
+      const base64Data = frameBase64.replace(/^data:image\/[a-z]+;base64,/, '');
+      
+      // Enhanced validation for base64 data
+      if (!base64Data || base64Data.length < 1000) { // Increased minimum size
+        throw new Error('Invalid frame data. Frame appears to be empty or corrupted.');
+      }
+      
+      // Validate base64 format
+      const base64Regex = /^[A-Za-z0-9+/]*={0,2}$/;
+      if (!base64Regex.test(base64Data)) {
+        throw new Error('Invalid base64 format. Frame data is corrupted.');
+      }
+      
+      // Log for debugging
+      console.log('Sending frame data:', {
+        length: base64Data.length,
+        preview: base64Data.substring(0, 50) + '...',
+        language
+      });
+
       const response = await apiService.analyzeScreenFrame(base64Data, language);
 
       if (response.success) {
@@ -104,16 +161,24 @@ export function ScreenShareCapture() {
           role: 'assistant',
           content: response.response,
         });
-        toast({
-          title: 'Screen Analyzed',
-          description: `Analysis complete in ${getLanguageName(language)}`,
-        });
       }
     } catch (error) {
       console.error('Error analyzing screen:', error);
+      
+      let errorMessage = 'Failed to analyze screen. Please check your backend connection.';
+      if (error instanceof Error) {
+        if (error.message.includes('Invalid frame data')) {
+          errorMessage = 'Screen capture failed. Please try sharing your screen again.';
+        } else if (error.message.includes('Invalid base64 format')) {
+          errorMessage = 'Frame data corrupted. Please try capturing again.';
+        } else {
+          errorMessage = error.message;
+        }
+      }
+      
       toast({
         title: 'Analysis Failed',
-        description: error instanceof Error ? error.message : 'Failed to analyze screen. Please check your backend connection.',
+        description: errorMessage,
         variant: 'destructive',
       });
     } finally {
@@ -121,10 +186,57 @@ export function ScreenShareCapture() {
     }
   };
 
+  const startContinuousAnalysis = () => {
+    if (isContinuousAnalysis) return;
+    
+    setIsContinuousAnalysis(true);
+    startAutoCapture();
+    
+    toast({
+      title: 'Continuous Analysis Started',
+      description: `Analyzing screen every ${analysisInterval / 1000} seconds`,
+    });
+  };
+
+  const startAutoCapture = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+    }
+
+    // Wait 2 seconds before starting auto-capture to ensure video is ready
+    setTimeout(() => {
+      // Capture first frame immediately
+      captureFrame();
+      
+      // Then start interval
+      const interval = setInterval(() => {
+        captureFrame();
+      }, analysisInterval);
+      
+      intervalRef.current = interval;
+    }, 2000);
+  };
+
+  const stopContinuousAnalysis = () => {
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = null;
+    }
+    setIsContinuousAnalysis(false);
+    
+    toast({
+      title: 'Continuous Analysis Stopped',
+      description: 'Screen analysis has been paused',
+    });
+  };
+
   useEffect(() => {
     return () => {
       if (stream) {
         stream.getTracks().forEach((track) => track.stop());
+      }
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
       }
     };
   }, [stream]);
@@ -188,6 +300,23 @@ export function ScreenShareCapture() {
               )}
             </Button>
             <Button
+              onClick={isContinuousAnalysis ? stopContinuousAnalysis : startContinuousAnalysis}
+              variant={isContinuousAnalysis ? "destructive" : "secondary"}
+              className="shrink-0"
+            >
+              {isContinuousAnalysis ? (
+                <>
+                  <Pause className="w-4 h-4 mr-2" />
+                  Pause
+                </>
+              ) : (
+                <>
+                  <Play className="w-4 h-4 mr-2" />
+                  Auto
+                </>
+              )}
+            </Button>
+            <Button
               onClick={stopScreenShare}
               variant="destructive"
               className="shrink-0"
@@ -195,6 +324,36 @@ export function ScreenShareCapture() {
               <MonitorOff className="w-4 h-4 mr-2" />
               Stop
             </Button>
+          </div>
+
+          {/* Continuous Analysis Settings */}
+          <div className="space-y-3 p-4 rounded-lg bg-secondary/30 border border-border/50">
+            <div className="flex items-center justify-between">
+              <label className="text-sm font-medium">Auto Analysis Interval</label>
+              <select
+                value={analysisInterval}
+                onChange={(e) => setAnalysisInterval(Number(e.target.value))}
+                className="px-3 py-1 rounded-md border border-border/50 bg-background text-sm"
+                disabled={isContinuousAnalysis}
+              >
+                <option value={3000}>3 seconds</option>
+                <option value={5000}>5 seconds</option>
+                <option value={10000}>10 seconds</option>
+                <option value={15000}>15 seconds</option>
+                <option value={30000}>30 seconds</option>
+              </select>
+            </div>
+            {lastAnalysisTime && (
+              <div className="text-xs text-muted-foreground">
+                Last analysis: {lastAnalysisTime.toLocaleTimeString()}
+              </div>
+            )}
+            {isContinuousAnalysis && (
+              <div className="flex items-center gap-2 text-xs text-green-600">
+                <span className="w-2 h-2 rounded-full bg-green-600 animate-pulse" />
+                Continuous analysis active
+              </div>
+            )}
           </div>
         </div>
       )}

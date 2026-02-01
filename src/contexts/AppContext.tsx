@@ -23,6 +23,10 @@ interface AppContextType {
   currentResponse: string | null;
   setCurrentResponse: (response: string | null) => void;
   
+  // Input State
+  input: string;
+  setInput: (input: string) => void;
+  
   // Loading States
   isAnalyzing: boolean;
   setIsAnalyzing: (loading: boolean) => void;
@@ -36,8 +40,8 @@ interface AppContextType {
   setAvatarVideoUrl: (url: string | null) => void;
   
   // Active Mode
-  activeMode: 'vision' | 'chat' | 'screen';
-  setActiveMode: (mode: 'vision' | 'chat' | 'screen') => void;
+  activeMode: 'vision' | 'chat' | 'screen' | 'files' | 'analytics' | 'search' | 'notes';
+  setActiveMode: (mode: 'vision' | 'chat' | 'screen' | 'files' | 'analytics' | 'search' | 'notes') => void;
   
   // Uploaded Image
   uploadedImage: File | null;
@@ -52,11 +56,12 @@ export function AppProvider({ children }: { children: ReactNode }) {
   const [language, setLanguage] = useState<LanguageCode>('en');
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentResponse, setCurrentResponse] = useState<string | null>(null);
+  const [input, setInput] = useState('');
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [isChatting, setIsChatting] = useState(false);
   const [isGeneratingAvatar, setIsGeneratingAvatar] = useState(false);
   const [avatarVideoUrl, setAvatarVideoUrl] = useState<string | null>(null);
-  const [activeMode, setActiveMode] = useState<'vision' | 'chat' | 'screen'>('vision');
+  const [activeMode, setActiveMode] = useState<'vision' | 'chat' | 'screen' | 'files' | 'analytics' | 'search' | 'notes'>('vision');
   const [uploadedImage, setUploadedImage] = useState<File | null>(null);
   const [uploadedImagePreview, setUploadedImagePreview] = useState<string | null>(null);
 
@@ -83,6 +88,8 @@ export function AppProvider({ children }: { children: ReactNode }) {
         clearMessages,
         currentResponse,
         setCurrentResponse,
+        input,
+        setInput,
         isAnalyzing,
         setIsAnalyzing,
         isChatting,

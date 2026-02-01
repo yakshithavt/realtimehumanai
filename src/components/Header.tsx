@@ -1,5 +1,7 @@
 import React from 'react';
 import { LanguageSelector } from '@/components/LanguageSelector';
+import { ThemeToggle } from '@/components/ThemeToggle';
+import { UserMenu } from '@/components/Auth/UserMenu';
 import { Sparkles, Zap } from 'lucide-react';
 
 export function Header() {
@@ -22,7 +24,9 @@ export function Header() {
         </div>
 
         <div className="flex items-center gap-4">
+          <ThemeToggle />
           <LanguageSelector />
+          <UserMenu />
         </div>
       </div>
     </header>

@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { Send, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { useApp, getLanguageName } from '@/contexts/AppContext';
 import { apiService } from '@/lib/api';
 import { useToast } from '@/hooks/use-toast';
+import { VoiceControls } from '@/components/VoiceControls';
 import { cn } from '@/lib/utils';
 
 export function ChatBox() {
@@ -18,8 +19,9 @@ export function ChatBox() {
     setIsChatting,
     setCurrentResponse,
     currentResponse,
+    input,
+    setInput,
   } = useApp();
-  const [input, setInput] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
 
@@ -148,27 +150,31 @@ export function ChatBox() {
         </div>
       </ScrollArea>
 
-      <div className="flex gap-2 pt-4 border-t border-border/50">
-        <Input
-          value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyDown={handleKeyDown}
-          placeholder={`Ask a question in ${getLanguageName(language)}...`}
-          className="flex-1 bg-secondary/50 border-border/50 focus:border-primary"
-          disabled={isChatting}
-        />
-        <Button
-          onClick={handleSend}
-          disabled={!input.trim() || isChatting}
-          size="icon"
-          className="gradient-primary text-primary-foreground glow-primary shrink-0"
-        >
-          {isChatting ? (
-            <Loader2 className="w-5 h-5 animate-spin" />
-          ) : (
-            <Send className="w-5 h-5" />
-          )}
-        </Button>
+      <div className="space-y-3">
+        <VoiceControls />
+        
+        <div className="flex gap-2 pt-2 border-t border-border/50">
+          <Input
+            value={input}
+            onChange={(e) => setInput(e.target.value)}
+            onKeyDown={handleKeyDown}
+            placeholder={`Ask a question in ${getLanguageName(language)}...`}
+            className="flex-1 bg-secondary/50 border-border/50 focus:border-primary"
+            disabled={isChatting}
+          />
+          <Button
+            onClick={handleSend}
+            disabled={!input.trim() || isChatting}
+            size="icon"
+            className="gradient-primary text-primary-foreground glow-primary shrink-0"
+          >
+            {isChatting ? (
+              <Loader2 className="w-5 h-5 animate-spin" />
+            ) : (
+              <Send className="w-5 h-5" />
+            )}
+          </Button>
+        </div>
       </div>
     </div>
   );

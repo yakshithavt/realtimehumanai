@@ -90,6 +90,10 @@ export default function LiveAvatar() {
   
   const [inputText, setInputText] = useState('');
   const [logs, setLogs] = useState<string[]>([]);
+  const [retryCount, setRetryCount] = useState(0);
+  const [retryCountdown, setRetryCountdown] = useState(0);
+  const maxRetries = 3;
+  const retryDelay = 30000; // 30 seconds instead of 5 seconds
   const videoRef = useRef<HTMLVideoElement>(null);
   const sessionRef = useRef<any>(null);
 
@@ -100,9 +104,10 @@ export default function LiveAvatar() {
 
   const createSession = async () => {
     setState(prev => ({ ...prev, isLoading: true, error: null }));
-    addLog('🔑 Creating LiveAvatar session...');
-
+    
     try {
+      addLog('🔑 Creating LiveAvatar session...');
+      
       const response = await fetch('http://localhost:8000/api/live-avatar/create-session', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -209,11 +214,59 @@ export default function LiveAvatar() {
       // Start the session
       await session.start();
       addLog('✅ LiveAvatar session is active!');
+      setRetryCount(0); // Reset retry count on success
       
     } catch (error) {
-      const errorMessage = error instanceof Error ? error.message : 'SDK initialization failed';
+      let errorMessage = 'SDK initialization failed';
+      
+      if (error instanceof Error) {
+        errorMessage = error.message;
+        
+        // Handle specific HeyGen API errors
+        if (error.message.includes('Session concurrency limit reached')) {
+          if (retryCount < maxRetries) {
+            errorMessage = `HeyGen session limit reached. Retrying in ${retryDelay/1000} seconds... (${retryCount + 1}/${maxRetries})`;
+            addLog(`⚠️ HeyGen API limit reached - retry ${retryCount + 1}/${maxRetries}`);
+            
+            // Schedule retry
+            let countdown = retryDelay / 1000;
+            setRetryCountdown(countdown);
+            
+            const countdownInterval = setInterval(() => {
+              countdown -= 1;
+              setRetryCountdown(countdown);
+              if (countdown <= 0) {
+                clearInterval(countdownInterval);
+              }
+            }, 1000);
+            
+            setTimeout(() => {
+              clearInterval(countdownInterval);
+              setRetryCountdown(0);
+              setRetryCount(prev => prev + 1);
+              createSession();
+            }, retryDelay);
+          } else {
+            errorMessage = 'HeyGen session limit reached. Please try again later or use the regular chat feature.';
+            addLog('❌ Max retries reached for HeyGen API');
+            setRetryCount(0);
+          }
+        } else if (error.message.includes('403') || error.message.includes('Forbidden')) {
+          errorMessage = 'HeyGen API access denied. Please check your API key configuration.';
+          addLog('⚠️ HeyGen API access issue');
+        } else if (error.message.includes('401') || error.message.includes('Unauthorized')) {
+          errorMessage = 'HeyGen API authentication failed. Please check your credentials.';
+          addLog('⚠️ HeyGen authentication issue');
+        }
+      }
+      
       addLog(`❌ Error: ${errorMessage}`);
-      setState(prev => ({ ...prev, error: errorMessage, isLoading: false }));
+      setState(prev => ({ 
+        ...prev, 
+        error: errorMessage, 
+        isLoading: false,
+        isAvatarActive: false 
+      }));
     }
   };
 
@@ -515,6 +568,28 @@ export default function LiveAvatar() {
           {state.isLoading ? 'Starting...' : '🎭 Start Avatar'}
         </button>
         
+        {state.error && state.error.includes('HeyGen') && (
+          <>
+            <button
+              onClick={() => {
+                setRetryCount(0);
+                createSession();
+              }}
+              disabled={state.isLoading || retryCountdown > 0}
+              className="px-4 py-2 bg-yellow-600 text-white rounded-lg hover:bg-yellow-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              {retryCountdown > 0 ? `🔄 Retry in ${retryCountdown}s` : '🔄 Retry Avatar'}
+            </button>
+            <button
+              onClick={comprehensiveCleanupSessions}
+              disabled={state.isLoading}
+              className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+            >
+              🧹 Clean Up Sessions
+            </button>
+          </>
+        )}
+        
         <button
           onClick={stopSession}
           disabled={!state.isAvatarActive}
@@ -592,8 +667,28 @@ export default function LiveAvatar() {
         {state.error && (
           <div className="text-red-600 text-sm">
             Error: {state.error}
+            {state.error.includes('HeyGen') && (
+              <div className="mt-2">
+                <button
+                  onClick={() => {
+                    // Switch to chat mode
+                    const chatModeButton = document.querySelector('[data-mode="chat"]') as HTMLButtonElement;
+                    chatModeButton?.click();
+                  }}
+                  className="text-blue-600 underline hover:no-underline"
+                >
+                  Try regular chat instead →
+                </button>
+              </div>
+            )}
           </div>
         )}
+        
+        {/* HeyGen API Info */}
+        <div className="mt-3 p-2 bg-blue-50 rounded text-xs text-blue-700">
+          <strong>ℹ️ HeyGen API Info:</strong> Free tier has session limits. 
+          If you encounter "concurrency limit reached", use "🧹 Clean Up Sessions" button, wait a few minutes, or try regular chat.
+        </div>
       </div>
 
       {/* Video Display */}

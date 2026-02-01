@@ -1,5 +1,5 @@
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, Dict, Any, List
 
 
 class VisionResponse(BaseModel):
@@ -31,7 +31,23 @@ class ScreenFrameResponse(BaseModel):
     language: str
 
 
+class FileAnalysisResponse(BaseModel):
+    """Response model for file analysis."""
+    success: bool
+    response: str
+    language: str
+    fileName: str
+    fileType: str
+
+
 class HealthResponse(BaseModel):
     """Response model for health check."""
     status: str
+    message: str
+
+
+class AnalyticsResponse(BaseModel):
+    """Response model for analytics endpoints."""
+    success: bool
+    data: Optional[Dict[str, Any]] = None
     message: str
